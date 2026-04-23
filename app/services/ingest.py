@@ -7,6 +7,7 @@ from app.collectors.base import BaseCollector
 from app.collectors.cs2sh import CS2SHCollector
 from app.collectors.mock_source import MockCollector
 from app.models import Item, MarketQuote, TradeSignal
+from app.services.item_aliases import resolve_item_input
 from app.services.indicators import compute_indicators
 from app.services.signals import build_signal_from_frame
 
@@ -15,6 +16,7 @@ def get_collector(source: str) -> BaseCollector:
     mapping: dict[str, BaseCollector] = {
         "mock": MockCollector(),
         "cs2sh": CS2SHCollector(),
+        "youpin": CS2SHCollector(),
     }
     if source not in mapping:
         raise ValueError(f"Unsupported source: {source}")
@@ -23,19 +25,22 @@ def get_collector(source: str) -> BaseCollector:
 
 async def ingest_quotes(db: Session, source: str, market_hash_name: str, limit: int = 120) -> int:
     collector = get_collector(source)
-    quotes = await collector.fetch_history(market_hash_name=market_hash_name, limit=limit)
+    resolved_name, display_name = resolve_item_input(market_hash_name, source=source)
+    quotes = await collector.fetch_history(market_hash_name=resolved_name, limit=limit)
     if not quotes:
         return 0
 
-    item = db.scalar(select(Item).where(Item.market_hash_name == market_hash_name))
+    item = db.scalar(select(Item).where(Item.market_hash_name == resolved_name))
     if item is None:
         item = Item(
-            market_hash_name=market_hash_name,
-            display_name=quotes[0].display_name,
+            market_hash_name=resolved_name,
+            display_name=display_name or quotes[0].display_name,
             game="cs2",
         )
         db.add(item)
         db.flush()
+    elif display_name and item.display_name != display_name:
+        item.display_name = display_name
 
     inserted = 0
     existing_ts = {

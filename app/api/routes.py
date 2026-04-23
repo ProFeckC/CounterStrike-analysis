@@ -23,7 +23,7 @@ def health_check() -> dict[str, str]:
 
 @router.post("/ingest/mock", response_model=IngestResponse)
 async def ingest_mock_data(
-    item_name: str = Query(default="AK-47 | Redline (Field-Tested)"),
+    item_name: str = Query(default="AK-47 | 红线（久经沙场）"),
     limit: int = Query(default=120, ge=30, le=1000),
     db: Session = Depends(get_db),
 ):
